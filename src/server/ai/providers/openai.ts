@@ -1,5 +1,6 @@
 import "server-only";
 
+import OpenAI from "openai";
 import type {
   AIProvider,
   CategoryForCategorization,
@@ -10,11 +11,15 @@ import type {
 import { buildCategorizationPrompt, SYSTEM_PROMPT } from "../prompts";
 import { parseCategorizationResponse } from "../parse-categorization-response";
 
-export class OllamaProvider implements AIProvider {
+export class OpenAIProvider implements AIProvider {
+  private client: OpenAI;
+
   constructor(
-    private baseUrl: string,
+    apiKey: string,
     private model: string
-  ) {}
+  ) {
+    this.client = new OpenAI({ apiKey });
+  }
 
   async categorize(
     transactions: TransactionForCategorization[],
@@ -30,28 +35,17 @@ export class OllamaProvider implements AIProvider {
       pastCorrections
     );
 
-    const response = await fetch(`${this.baseUrl}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: this.model,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: prompt },
-        ],
-        stream: false,
-        format: "json",
-      }),
+    const response = await this.client.chat.completions.create({
+      model: this.model,
+      max_tokens: 4096,
+      temperature: 0.2,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: prompt },
+      ],
     });
 
-    if (!response.ok) {
-      throw new Error(`Ollama request failed: ${response.status}`);
-    }
-
-    const data = (await response.json()) as {
-      message?: { content?: string };
-    };
-    const text = data.message?.content ?? "";
+    const text = response.choices[0]?.message?.content ?? "";
 
     return parseCategorizationResponse(
       text,
