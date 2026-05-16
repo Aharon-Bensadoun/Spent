@@ -10,9 +10,9 @@ import {
 } from "react";
 import Link from "next/link";
 import {
+  History,
   Loader2,
   MessageSquarePlus,
-  MoreHorizontal,
   Send,
   Sparkles,
   Square,
@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -154,25 +155,25 @@ export function ChatDrawer({ open, onOpenChange }: ChatDrawerProps) {
                 {activeThread?.title ?? "Ask anything about your finances"}
               </SheetDescription>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="mr-8 flex items-center gap-1">
+              {/*
+                Keep some right margin so the menu trigger never sits flush
+                against the Sheet's built-in close button - the previous
+                layout made it very easy to misclick "close" when reaching
+                for "new chat".
+              */}
               <ThreadSwitcher
                 threads={threadsQuery.data ?? []}
                 activeId={activeThreadId}
+                disabled={!status.data?.available}
+                creatingThread={createThread.isPending}
                 onSelect={(id) => {
                   stream.cancel();
                   setActiveThreadId(id);
                 }}
+                onNew={handleNewChat}
                 onDelete={handleDeleteThread}
               />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={handleNewChat}
-                disabled={!status.data?.available || createThread.isPending}
-                aria-label="New chat"
-              >
-                <MessageSquarePlus />
-              </Button>
             </div>
           </div>
         </SheetHeader>
@@ -218,50 +219,78 @@ export function ChatDrawer({ open, onOpenChange }: ChatDrawerProps) {
 function ThreadSwitcher({
   threads,
   activeId,
+  disabled,
+  creatingThread,
   onSelect,
+  onNew,
   onDelete,
 }: {
   threads: ChatThreadSummary[];
   activeId: number | null;
+  disabled: boolean;
+  creatingThread: boolean;
   onSelect: (id: number) => void;
+  onNew: () => void;
   onDelete: (id: number) => void;
 }) {
-  if (threads.length === 0) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="ghost" size="icon-sm" aria-label="Switch chat">
-            <MoreHorizontal />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={disabled}
+            aria-label="Conversations menu"
+          >
+            <History />
           </Button>
         }
       />
       <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel>Conversations</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {threads.map((t) => (
-          <DropdownMenuItem
-            key={t.id}
-            className={cn(
-              "flex items-center justify-between gap-2",
-              t.id === activeId && "bg-accent"
-            )}
-            onClick={() => onSelect(t.id)}
-          >
-            <span className="min-w-0 flex-1 truncate">{t.title}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(t.id);
-              }}
-              className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              aria-label={`Delete ${t.title}`}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuItem
+          onClick={onNew}
+          disabled={creatingThread}
+          className="font-medium"
+        >
+          <MessageSquarePlus className="h-4 w-4" />
+          <span>New conversation</span>
+        </DropdownMenuItem>
+        {threads.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            {/*
+              Base UI requires GroupLabel + Items to live under a Group root
+              context, otherwise it throws at render time.
+            */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Recent</DropdownMenuLabel>
+              {threads.map((t) => (
+                <DropdownMenuItem
+                  key={t.id}
+                  className={cn(
+                    "flex items-center justify-between gap-2",
+                    t.id === activeId && "bg-accent"
+                  )}
+                  onClick={() => onSelect(t.id)}
+                >
+                  <span className="min-w-0 flex-1 truncate">{t.title}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(t.id);
+                    }}
+                    className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Delete ${t.title}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -326,10 +355,11 @@ function ChatBody({
   }, [messages.length, optimisticUser?.id, streaming?.text, streaming?.toolCalls.length]);
 
   // Build the tool-result lookup so each tool_use card can resolve its output.
+  // We accept tool_result blocks from any message (canonical tool rows, and
+  // legacy assistant rows from before the persistence fix that mixed them in).
   const toolResults = useMemo(() => {
     const map = new Map<string, { output: unknown; isError: boolean }>();
     for (const msg of messages) {
-      if (msg.role !== "tool") continue;
       for (const block of msg.blocks) {
         if (block.type === "tool_result") {
           map.set(block.toolUseId, {

@@ -11,11 +11,20 @@ import {
   createChatProvider,
   isChatAvailable,
 } from "@/server/ai/chat-factory";
-import { runAgent } from "@/server/ai/agent-loop";
+import { runAgent, type AgentSegment } from "@/server/ai/agent-loop";
 import { buildSystemPrompt, TITLE_PROMPT_INSTRUCTIONS } from "@/server/ai/chat-prompts";
 import { CHAT_TOOL_DESCRIPTORS } from "@/server/ai/chat-tools";
 import { toLocalISODate } from "@/server/lib/date-utils";
 import type { ChatBlock, ChatMessage } from "@/server/ai/chat-types";
+
+function findLastAssistantIndex(segments: AgentSegment[]): number {
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (segments[i].role === "assistant" && segments[i].blocks.length > 0) {
+      return i;
+    }
+  }
+  return -1;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -128,7 +137,7 @@ export async function POST(
       send("user-message", { message: userMessage });
 
       try {
-        let assistantBlocks: ChatBlock[] = [];
+        let segments: AgentSegment[] = [];
         let usage: { inputTokens?: number; outputTokens?: number } = {};
 
         for await (const event of runAgent({
@@ -158,19 +167,27 @@ export async function POST(
           } else if (event.type === "error") {
             send("error", { message: event.message });
           } else if (event.type === "done") {
-            assistantBlocks = event.blocks;
+            segments = event.segments;
             usage = event.usage;
           }
         }
 
-        if (assistantBlocks.length > 0) {
+        // Persist each agent segment as its own row so role/content stay
+        // consistent on replay. Only the last assistant segment carries
+        // provider/model/token usage; tool rows are provider-neutral.
+        const lastAssistantIdx = findLastAssistantIndex(segments);
+        for (let i = 0; i < segments.length; i++) {
+          const seg = segments[i];
+          if (seg.blocks.length === 0) continue;
+          const isLastAssistant =
+            seg.role === "assistant" && i === lastAssistantIdx;
           const persisted = appendMessage(workspaceId, threadId, {
-            role: "assistant",
-            blocks: assistantBlocks,
-            provider: provider.id,
-            model: provider.model,
-            tokensIn: usage.inputTokens ?? null,
-            tokensOut: usage.outputTokens ?? null,
+            role: seg.role,
+            blocks: seg.blocks,
+            provider: seg.role === "assistant" ? provider.id : null,
+            model: seg.role === "assistant" ? provider.model : null,
+            tokensIn: isLastAssistant ? (usage.inputTokens ?? null) : null,
+            tokensOut: isLastAssistant ? (usage.outputTokens ?? null) : null,
           });
           send("assistant-message", { message: persisted });
         }
@@ -178,7 +195,10 @@ export async function POST(
         if (isFirstExchange) {
           // Fire-and-forget title generation. Errors are swallowed so a flaky
           // model doesn't ruin the main response.
-          generateTitle(provider, text, assistantBlocks)
+          const titleSeedBlocks = segments
+            .filter((s) => s.role === "assistant")
+            .flatMap((s) => s.blocks);
+          generateTitle(provider, text, titleSeedBlocks)
             .then((title) => {
               if (title) {
                 const updated = renameThread(workspaceId, threadId, title);

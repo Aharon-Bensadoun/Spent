@@ -37,8 +37,8 @@ function toAnthropicTools(tools: ToolDescriptor[]): AnthropicTool[] {
   }));
 }
 
-function blocksToAnthropicContent(blocks: ChatBlock[]): unknown[] {
-  const content: unknown[] = [];
+function blocksToAnthropicContent(blocks: ChatBlock[]): AnthropicContentBlock[] {
+  const content: AnthropicContentBlock[] = [];
   for (const block of blocks) {
     if (block.type === "text") {
       const text = block.text.trim();
@@ -66,20 +66,121 @@ function blocksToAnthropicContent(blocks: ChatBlock[]): unknown[] {
   return content;
 }
 
-function toAnthropicMessages(messages: ChatMessage[]): unknown[] {
-  const out: unknown[] = [];
+interface AnthropicTextBlock {
+  type: "text";
+  text: string;
+}
+interface AnthropicToolUseBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: unknown;
+}
+interface AnthropicToolResultBlock {
+  type: "tool_result";
+  tool_use_id: string;
+  is_error: boolean;
+  content: string;
+}
+type AnthropicContentBlock =
+  | AnthropicTextBlock
+  | AnthropicToolUseBlock
+  | AnthropicToolResultBlock;
+interface AnthropicAPIMessage {
+  role: "user" | "assistant";
+  content: AnthropicContentBlock[];
+}
+
+/**
+ * Anthropic rejects assistant turns whose tool_use ids are not echoed back as
+ * tool_result blocks in the very next message. Legacy rows where the agent
+ * loop terminated mid-iteration can leave such orphans; rather than 400-ing
+ * the whole conversation, inject a synthetic error tool_result so the model
+ * can move on.
+ */
+function ensureToolUseAcked(messages: AnthropicAPIMessage[]): AnthropicAPIMessage[] {
+  const out: AnthropicAPIMessage[] = [];
+  for (let i = 0; i < messages.length; i++) {
+    const current = messages[i];
+    out.push(current);
+    if (current.role !== "assistant") continue;
+    const toolUseIds = current.content
+      .filter((b): b is AnthropicToolUseBlock => b.type === "tool_use")
+      .map((b) => b.id);
+    if (toolUseIds.length === 0) continue;
+
+    const next = messages[i + 1];
+    const ackedIds = new Set(
+      next?.role === "user"
+        ? next.content
+            .filter((b): b is AnthropicToolResultBlock => b.type === "tool_result")
+            .map((b) => b.tool_use_id)
+        : []
+    );
+    const missing = toolUseIds.filter((id) => !ackedIds.has(id));
+    if (missing.length === 0) continue;
+
+    const synthetic: AnthropicToolResultBlock[] = missing.map((id) => ({
+      type: "tool_result",
+      tool_use_id: id,
+      is_error: true,
+      content:
+        "(no result recorded - tool execution was interrupted in a previous session)",
+    }));
+
+    if (next?.role === "user") {
+      // Prepend synthetic tool_results so they come before the user's text.
+      next.content = [...synthetic, ...next.content];
+    } else {
+      out.push({ role: "user", content: synthetic });
+    }
+  }
+  return out;
+}
+
+function toAnthropicMessages(messages: ChatMessage[]): AnthropicAPIMessage[] {
+  const out: AnthropicAPIMessage[] = [];
   for (const msg of messages) {
     if (msg.role === "system") continue; // system prompt is passed separately
     if (msg.role === "tool") {
       // tool messages are folded into a user turn with tool_result blocks
-      out.push({ role: "user", content: blocksToAnthropicContent(msg.blocks) });
+      const content = blocksToAnthropicContent(msg.blocks);
+      if (content.length === 0) continue;
+      out.push({ role: "user", content });
       continue;
     }
-    const role: "user" | "assistant" =
-      msg.role === "assistant" ? "assistant" : "user";
+    if (msg.role === "assistant") {
+      // Legacy rows from before the persistence fix may hold an entire
+      // multi-iteration turn in one assistant row: e.g.
+      //   [text, tool_use_A, tool_result_A, text, tool_use_B, tool_result_B, text]
+      // Anthropic requires strict alternation where each tool_use is immediately
+      // followed by a user message whose first blocks are the matching
+      // tool_result. Walk the blocks and reconstruct that alternating shape
+      // by flushing whenever the block type would change the role.
+      let pending: ChatBlock[] = [];
+      let pendingRole: "assistant" | "user" = "assistant";
+      const flush = () => {
+        if (pending.length === 0) return;
+        const content = blocksToAnthropicContent(pending);
+        if (content.length > 0) out.push({ role: pendingRole, content });
+        pending = [];
+      };
+      for (const block of msg.blocks) {
+        const blockRole: "assistant" | "user" =
+          block.type === "tool_result" ? "user" : "assistant";
+        if (blockRole !== pendingRole) {
+          flush();
+          pendingRole = blockRole;
+        }
+        pending.push(block);
+      }
+      flush();
+      continue;
+    }
+    // user
     const content = blocksToAnthropicContent(msg.blocks);
     if (content.length === 0) continue;
-    out.push({ role, content });
+    out.push({ role: "user", content });
   }
   return out;
 }
@@ -102,7 +203,7 @@ export class ClaudeChatProvider implements ChatProvider {
 
   async *stream(args: ChatStreamArgs): AsyncIterable<ChatStreamEvent> {
     const tools = toAnthropicTools(args.tools);
-    const messages = toAnthropicMessages(args.messages);
+    const messages = ensureToolUseAcked(toAnthropicMessages(args.messages));
 
     let stream;
     try {

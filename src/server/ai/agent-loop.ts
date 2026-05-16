@@ -11,6 +11,17 @@ import { CHAT_TOOLS, findTool, type ToolContext } from "./chat-tools";
 const MAX_ITERATIONS = 6;
 const MAX_TOOL_RESULT_BYTES = 16 * 1024;
 
+/**
+ * A persistable slice of the assistant turn. We keep assistant text/tool_use
+ * blocks separate from tool_result blocks so the persistence layer can store
+ * them with the correct role - mixing them in one row violates the Anthropic
+ * API contract (tool_result must live in user-role messages on replay).
+ */
+export interface AgentSegment {
+  role: "assistant" | "tool";
+  blocks: ChatBlock[];
+}
+
 export type AgentEvent =
   | { type: "text_delta"; text: string }
   | {
@@ -29,7 +40,7 @@ export type AgentEvent =
     }
   | {
       type: "done";
-      blocks: ChatBlock[];
+      segments: AgentSegment[];
       usage: { inputTokens?: number; outputTokens?: number };
     }
   | { type: "error"; message: string };
@@ -75,7 +86,7 @@ export async function* runAgent(
 ): AsyncIterable<AgentEvent> {
   const tools = options.tools ?? CHAT_TOOLS.map((t) => t.descriptor);
   const conversation: ChatMessage[] = [...options.history];
-  const finalBlocks: ChatBlock[] = [];
+  const segments: AgentSegment[] = [];
   let inputTokens: number | undefined;
   let outputTokens: number | undefined;
 
@@ -134,12 +145,16 @@ export async function* runAgent(
 
     if (hadError) {
       // Provider already reported the error; bail out and persist whatever we have.
-      finalBlocks.push(...turnBlocks);
+      if (turnBlocks.length > 0) {
+        segments.push({ role: "assistant", blocks: turnBlocks });
+      }
       break;
     }
 
-    finalBlocks.push(...turnBlocks);
-    conversation.push({ role: "assistant", blocks: turnBlocks });
+    if (turnBlocks.length > 0) {
+      segments.push({ role: "assistant", blocks: turnBlocks });
+      conversation.push({ role: "assistant", blocks: turnBlocks });
+    }
 
     if (pendingToolUses.length === 0 || stopReason !== "tool_use") {
       break;
@@ -189,13 +204,15 @@ export async function* runAgent(
       };
     }
 
-    finalBlocks.push(...toolResultBlocks);
-    conversation.push({ role: "tool", blocks: toolResultBlocks });
+    if (toolResultBlocks.length > 0) {
+      segments.push({ role: "tool", blocks: toolResultBlocks });
+      conversation.push({ role: "tool", blocks: toolResultBlocks });
+    }
   }
 
   yield {
     type: "done",
-    blocks: finalBlocks,
+    segments,
     usage: { inputTokens, outputTokens },
   };
 }

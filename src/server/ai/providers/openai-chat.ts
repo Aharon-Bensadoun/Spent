@@ -64,31 +64,67 @@ function blocksToOpenAIMessages(message: ChatMessage): OpenAIMessage[] {
   }
 
   if (message.role === "assistant") {
-    const textParts: string[] = [];
-    const toolCalls: NonNullable<OpenAIMessage["tool_calls"]> = [];
-    for (const block of message.blocks) {
-      if (block.type === "text") {
-        if (block.text.length > 0) textParts.push(block.text);
-      } else if (block.type === "tool_use") {
-        toolCalls.push({
-          id: block.id,
-          type: "function",
-          function: {
-            name: block.name,
-            arguments:
-              typeof block.input === "string"
-                ? block.input
-                : JSON.stringify(block.input ?? {}),
-          },
+    // Walk the blocks and emit alternating assistant/tool segments so legacy
+    // rows that mixed multi-iteration content into one row are reconstructed
+    // into a valid OpenAI history. OpenAI requires each tool_call to be
+    // matched by a role:tool message that follows the assistant message.
+    let pending: ChatBlock[] = [];
+    let pendingKind: "assistant" | "tool" = "assistant";
+    const flushAssistant = (blocks: ChatBlock[]) => {
+      const textParts: string[] = [];
+      const toolCalls: NonNullable<OpenAIMessage["tool_calls"]> = [];
+      for (const block of blocks) {
+        if (block.type === "text") {
+          if (block.text.length > 0) textParts.push(block.text);
+        } else if (block.type === "tool_use") {
+          toolCalls.push({
+            id: block.id,
+            type: "function",
+            function: {
+              name: block.name,
+              arguments:
+                typeof block.input === "string"
+                  ? block.input
+                  : JSON.stringify(block.input ?? {}),
+            },
+          });
+        }
+      }
+      const msg: OpenAIMessage = { role: "assistant" };
+      const text = textParts.join("");
+      if (text.length > 0) msg.content = text;
+      if (toolCalls.length > 0) msg.tool_calls = toolCalls;
+      if (msg.content || msg.tool_calls) out.push(msg);
+    };
+    const flushTool = (blocks: ChatBlock[]) => {
+      for (const block of blocks) {
+        if (block.type !== "tool_result") continue;
+        out.push({
+          role: "tool",
+          tool_call_id: block.toolUseId,
+          content:
+            typeof block.output === "string"
+              ? block.output
+              : JSON.stringify(block.output),
         });
       }
+    };
+    const flush = () => {
+      if (pending.length === 0) return;
+      if (pendingKind === "assistant") flushAssistant(pending);
+      else flushTool(pending);
+      pending = [];
+    };
+    for (const block of message.blocks) {
+      const kind: "assistant" | "tool" =
+        block.type === "tool_result" ? "tool" : "assistant";
+      if (kind !== pendingKind) {
+        flush();
+        pendingKind = kind;
+      }
+      pending.push(block);
     }
-    const msg: OpenAIMessage = { role: "assistant" };
-    const text = textParts.join("");
-    if (text.length > 0) msg.content = text;
-    if (toolCalls.length > 0) msg.tool_calls = toolCalls;
-    // OpenAI requires either content or tool_calls; skip if both empty.
-    if (msg.content || msg.tool_calls) out.push(msg);
+    flush();
     return out;
   }
 
