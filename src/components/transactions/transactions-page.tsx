@@ -2,18 +2,25 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Download, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/app-shell";
 import { TransactionsTable } from "@/components/dashboard/transactions-table";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { AINotConnectedBanner } from "@/components/ai-not-connected-banner";
+import { Button } from "@/components/ui/button";
 import { KpiCards } from "./kpi-cards";
 import { WidgetsRow } from "./widgets-row";
 import {
+  fetchAllTransactions,
   getCategories,
   getTransactions,
   getTransactionsSummary,
 } from "@/lib/api";
 import type { TransactionKindFilter } from "@/lib/api";
+import {
+  downloadCsv,
+  transactionsToCsv,
+} from "@/lib/export-transactions-csv";
 import {
   addMonths,
   formatMonthLabel,
@@ -32,6 +39,7 @@ export function TransactionsPage() {
   const [categoryFilter, setCategoryFilter] = useState<number | undefined>();
   const [page, setPage] = useState(0);
   const [kind, setKind] = useState<TransactionKindFilter>("all");
+  const [exporting, setExporting] = useState(false);
 
   const { from, to } = getMonthRange(selectedDate);
 
@@ -83,17 +91,54 @@ export function TransactionsPage() {
       kind === "income" ? getCategories("income") : getCategories("expense"),
   });
 
+  async function handleExportCsv() {
+    setExporting(true);
+    try {
+      const transactions = await fetchAllTransactions({
+        from,
+        to,
+        search: search || undefined,
+        category: expandedFilter.category,
+        categoryIds: expandedFilter.categoryIds,
+        kind,
+      });
+      const monthKey = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}`;
+      downloadCsv(
+        transactionsToCsv(transactions),
+        `transactions-${monthKey}.csv`
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
         title="Transactions"
         meta={formatMonthLabel(selectedDate)}
         actions={
-          <PeriodSelector
-            label={formatMonthLabel(selectedDate)}
-            onPrev={() => setSelectedDate((d) => addMonths(d, -1))}
-            onNext={() => setSelectedDate((d) => addMonths(d, 1))}
-          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={exporting}
+              onClick={() => void handleExportCsv()}
+            >
+              {exporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              Export CSV
+            </Button>
+            <PeriodSelector
+              label={formatMonthLabel(selectedDate)}
+              onPrev={() => setSelectedDate((d) => addMonths(d, -1))}
+              onNext={() => setSelectedDate((d) => addMonths(d, 1))}
+            />
+          </div>
         }
       />
 

@@ -190,6 +190,33 @@ export function getTransactions(params: {
   );
 }
 
+const TRANSACTIONS_PAGE_SIZE = 200;
+
+export async function fetchAllTransactions(
+  params: Omit<
+    Parameters<typeof getTransactions>[0],
+    "limit" | "offset"
+  >
+): Promise<TransactionWithCategory[]> {
+  const all: TransactionWithCategory[] = [];
+  let offset = 0;
+  let total = Infinity;
+
+  while (offset < total) {
+    const page = await getTransactions({
+      ...params,
+      limit: TRANSACTIONS_PAGE_SIZE,
+      offset,
+    });
+    all.push(...page.transactions);
+    total = page.total;
+    offset += TRANSACTIONS_PAGE_SIZE;
+    if (page.transactions.length === 0) break;
+  }
+
+  return all;
+}
+
 export function setTransactionKind(id: number, kind: TransactionKind) {
   return fetchJSON<{ success: boolean }>(`/api/transactions/${id}`, {
     method: "PATCH",
