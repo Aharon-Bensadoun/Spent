@@ -44,13 +44,13 @@ The trade-off is honest: you self-host, you trust the scraper, and you accept th
 <td width="33%" valign="top">
 
 ### 🏦 Israeli bank integration
-Isracard, Bank Hapoalim, and Max work out of the box. Visa Cal and Bank Leumi are on the roadmap.
+Connect Israeli banks and card issuers supported by the pinned scraper library, including One Zero's OTP flow.
 
 </td>
 <td width="33%" valign="top">
 
 ### 🤖 AI categorization
-Choose Claude (Anthropic) for best accuracy, Ollama for fully local LLMs, or skip and categorize manually.
+Choose Claude, OpenAI, Ollama, or manual categorization. Corrections improve future merchant matches.
 
 </td>
 <td width="33%" valign="top">
@@ -97,6 +97,26 @@ Pull up to 3 months of transactions per sync (configurable). Most banks support 
 
 ### 🔍 Merchant memory
 Once you correct an AI categorization, Spent remembers — same merchant goes to the right category next time.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 💡 Financial insights
+Recurring commitments, price changes, unusual charges, budget risks, bank fees, and 30/60/90-day forecasts.
+
+</td>
+<td valign="top">
+
+### 💬 Confirmable AI assistant
+Ask questions against real data. The assistant can prepare changes, but only you can confirm them.
+
+</td>
+<td valign="top">
+
+### 💾 Encrypted backups
+Create password-protected portable backups and validate restores before applying them on restart.
 
 </td>
 </tr>
@@ -160,28 +180,28 @@ flowchart LR
     end
 ```
 
-Everything inside the dashed box stays on your laptop. The only outbound traffic is to your bank (for scraping) and optionally `api.anthropic.com` (if you chose Claude) or `localhost:11434` (if you chose Ollama).
+Everything inside the dashed box stays on your laptop. Outbound traffic goes only to connected banks, `api.anthropic.com` or `api.openai.com` when selected, `localhost:11434` for Ollama, and Google's favicon endpoint for bank logos.
 
 ## Supported banks
 
 | Bank | Type | Status |
 |---|---|---|
-| **Isracard** | Credit card | ✅ Supported |
-| **Bank Hapoalim** (incl. Poalim wallets) | Bank | ✅ Supported |
-| **Max** (formerly Leumi Card) | Credit card | ✅ Supported |
-| Visa Cal | Credit card | 🚧 Planned |
-| Bank Leumi | Bank | 🚧 Planned |
+| Isracard, Visa Cal, Max, Amex | Credit card | ✅ Wired |
+| Hapoalim, Leumi, Mizrahi, Discount, Mercantile | Bank | ✅ Wired |
+| FIBI group, Yahav, Massad | Bank | ✅ Wired |
+| One Zero | Bank | ✅ Wired with OTP |
+| Additional Israeli card programs | Credit card | ✅ Wired |
 
 Don't see your bank? Adding a scraper is a small wrapper around `israeli-bank-scrapers` — see [Contributing](#contributing).
 
 ## AI providers
 
-| | **Claude** (Anthropic) | **Ollama** (local) | **None** |
-|---|---|---|---|
-| Cost | ~₪0.004 per sync | Free | Free |
-| Accuracy | Best | Good (depends on model) | Manual |
-| Network | `api.anthropic.com` | `localhost:11434` | Offline |
-| Setup | API key | Install Ollama + pull a model | Nothing |
+| | **Claude** | **OpenAI** | **Ollama** | **None** |
+|---|---|---|---|---|
+| Cost | Paid API | Paid API | Free | Free |
+| Accuracy | Excellent | Excellent | Model-dependent | Manual |
+| Network | `api.anthropic.com` | `api.openai.com` | `localhost:11434` | Offline |
+| Assistant tools | Yes | Yes | No | No |
 
 Default model when Claude is selected: `claude-haiku-4-5` (cheap, fast, accurate for categorization). For Ollama, `llama3.2:3b` is the recommended default.
 
@@ -291,7 +311,7 @@ Full threat model and responsible-disclosure policy → [SECURITY.md](SECURITY.m
 ## Where your data lives
 
 - `data/spent.db` — transactions, categories, budgets, settings
-- `data/.encryption-key` — 32-byte AES key, mode `0600`
+- OS credential vault, or `data/.encryption-key` fallback — 32-byte AES key
 - `~/Library/Logs/Spent/` (macOS) / `~/.local/state/spent/log/` (Linux) — service logs
 
 Back up `data/` like any other folder. To migrate to a new machine, copy `data/` over and run `npm run service:install`.
@@ -311,7 +331,7 @@ spent/
 │   │   └── settings/         Per-tab settings panels
 │   ├── lib/                  Shared client-side types and helpers
 │   └── server/
-│       ├── ai/               Claude + Ollama provider implementations
+│       ├── ai/               Claude, OpenAI, and Ollama provider implementations
 │       ├── db/               SQLite singleton, migrations, query helpers
 │       ├── lib/              Encryption, dedup, transfer detection, pace
 │       └── scrapers/         Wrapper around israeli-bank-scrapers
@@ -337,9 +357,9 @@ spent/
 
 ## Roadmap
 
-- [ ] Visa Cal scraper
-- [ ] Bank Leumi scraper
-- [ ] CSV / OFX export
+- [x] Visa Cal and Bank Leumi scraper wiring
+- [x] CSV export
+- [ ] OFX import/export
 - [ ] Custom user-defined categories
 - [ ] Hebrew UI
 - [ ] Mobile companion (Phase 2)

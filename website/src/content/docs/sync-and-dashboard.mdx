@@ -81,6 +81,6 @@ Spent ships with a built-in dark theme. Toggle it from *Settings → Preferences
 
 ## Backups
 
-Spent stores everything in `data/spent.db` (a SQLite file). To back up, copy that file plus `data/.encryption-key` to a safe place. To restore on a new machine, drop those two files into the new install's `data/` folder before the first sync.
+Spent stores financial data in `data/spent.db`. Create a password-protected portable archive from *Settings → Data & privacy*; restore archives are validated and applied after Spent restarts.
 
 You can also use any SQLite-friendly backup tool that handles WAL-mode databases.

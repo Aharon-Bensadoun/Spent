@@ -12,13 +12,18 @@ function anyWorkspaceHasBank(): boolean {
   return row.count > 0;
 }
 
-export default function Transactions() {
+export default async function Transactions({
+  searchParams,
+}: {
+  searchParams: Promise<{ search?: string }>;
+}) {
   if (!anyWorkspaceHasBank()) {
     redirect("/setup");
   }
+  const { search } = await searchParams;
   return (
     <AppShell>
-      <TransactionsPage />
+      <TransactionsPage initialSearch={typeof search === "string" ? search : ""} />
     </AppShell>
   );
 }

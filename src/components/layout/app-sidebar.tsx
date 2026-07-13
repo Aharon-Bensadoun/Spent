@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -8,6 +9,7 @@ import {
   ArrowLeftRight,
   Settings as SettingsIcon,
   Star,
+  Lightbulb,
 } from "lucide-react";
 import {
   Sidebar,
@@ -42,6 +44,12 @@ const NAV = [
     Icon: ArrowLeftRight,
     match: (p: string) => p.startsWith("/transactions"),
   },
+  {
+    href: "/insights",
+    label: "Insights",
+    Icon: Lightbulb,
+    match: (p: string) => p.startsWith("/insights"),
+  },
 ];
 
 const FOOTER_NAV = [
@@ -63,14 +71,18 @@ export function AppSidebar() {
           href="/"
           className="-mx-1 flex items-center gap-2.5 rounded-lg px-1 py-1 transition-colors duration-200 hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
         >
-          <img
+          <Image
             src="/logo_lightmode.svg"
             alt="Spent"
+            width={84}
+            height={28}
             className="h-7 w-auto shrink-0 dark:hidden"
           />
-          <img
+          <Image
             src="/logo_darkmode.svg"
             alt="Spent"
+            width={84}
+            height={28}
             className="hidden h-7 w-auto shrink-0 dark:block"
           />
           <div className="min-w-0 group-data-[collapsible=icon]:hidden">

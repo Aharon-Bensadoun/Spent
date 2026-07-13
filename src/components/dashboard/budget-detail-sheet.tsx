@@ -274,7 +274,7 @@ function DetailContent({ data }: { data: CategoryDetail }) {
       <div className="space-y-5 p-6 pt-3">
         {data.category.isParent && data.children && data.children.length > 0 && (
           <ChildrenBreakdownSection
-            children={data.children}
+            items={data.children}
             budgetSource={data.budgetSource}
             color={data.category.color}
           />
@@ -457,11 +457,11 @@ function DetailContent({ data }: { data: CategoryDetail }) {
 }
 
 function ChildrenBreakdownSection({
-  children,
+  items,
   budgetSource,
   color,
 }: {
-  children: CategoryChildBreakdown[];
+  items: CategoryChildBreakdown[];
   budgetSource: "own" | "rollup" | "leaf";
   color: string;
 }) {
@@ -476,7 +476,7 @@ function ChildrenBreakdownSection({
     >
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-sm font-medium">
-          Sub-categories · {children.length}
+          Sub-categories · {items.length}
         </h3>
         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {budgetSource === "own" ? "Own budget" : "Rolled up"}
@@ -484,7 +484,7 @@ function ChildrenBreakdownSection({
       </div>
       <p className="text-xs text-muted-foreground">{banner}</p>
       <ul className="space-y-1.5">
-        {children.map((c) => {
+        {items.map((c) => {
           const pct = Math.min(100, Math.round(c.percentSpent));
           return (
             <li

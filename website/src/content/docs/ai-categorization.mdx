@@ -13,9 +13,9 @@ Spent uses a language model to assign each transaction to a category like *Groce
   <figcaption>Settings → AI, with all three providers shown.</figcaption>
 </figure>
 
-## Three options
+## Four options
 
-You have three choices, each with its own trade-offs.
+You have four choices, each with its own trade-offs.
 
 ### Claude (Anthropic API)
 
@@ -24,6 +24,14 @@ You have three choices, each with its own trade-offs.
 - **Quality** - excellent. Handles Hebrew merchant names and edge cases well.
 
 **Setup:** Go to `console.anthropic.com`, create an API key (under *Settings → API Keys*), paste it into Spent's setup wizard. Your key is encrypted at rest, same as bank credentials.
+
+### OpenAI API
+
+- **Cost** - paid API usage.
+- **Privacy** - categorization batches and structured financial-tool results are sent to OpenAI when used.
+- **Quality** - strong categorization and reliable tool calling for the financial assistant.
+
+The chat assistant is available with Claude or OpenAI. It reads data only through workspace-scoped tools. Supported changes are stored as proposals and require confirmation inside Spent.
 
 ### Ollama (local LLM)
 

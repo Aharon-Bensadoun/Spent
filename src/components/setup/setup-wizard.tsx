@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -134,14 +136,18 @@ export function SetupWizard({ mode = "first-run" }: { mode?: SetupMode }) {
 function BrandMark() {
   return (
     <div className="flex items-center gap-2.5">
-      <img
+      <Image
         src="/logo_lightmode.svg"
         alt="Spent"
+        width={84}
+        height={32}
         className="h-8 w-auto dark:hidden"
       />
-      <img
+      <Image
         src="/logo_darkmode.svg"
         alt="Spent"
+        width={84}
+        height={32}
         className="hidden h-8 w-auto dark:block"
       />
       <div>

@@ -129,7 +129,7 @@ function MonthlyTargetCard({
             </p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              No prior month history yet. Set a target you'd like to aim for.
+              No prior month history yet. Set a target you&apos;d like to aim for.
             </p>
           )}
         </div>

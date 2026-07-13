@@ -16,7 +16,7 @@ After you install Spent and open the dashboard for the first time, a short setup
 
 ## How credentials are stored
 
-Spent stores your bank credentials encrypted with **AES-256-GCM** in a local SQLite database at `data/spent.db`. The encryption key is generated on first run, written to `data/.encryption-key`, and never leaves your computer. Read the full story in [Security & privacy](/Spent/security-and-privacy).
+Spent stores your bank credentials encrypted with **AES-256-GCM** in a local SQLite database at `data/spent.db`. The key is protected by your OS credential vault when available and never leaves your computer. Read the full story in [Security & privacy](/Spent/security-and-privacy).
 
 ## A note about 2FA
 

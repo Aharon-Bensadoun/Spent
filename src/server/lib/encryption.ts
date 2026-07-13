@@ -3,6 +3,7 @@ import "server-only";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { readSystemSecret, writeSystemSecret, type SecretBackend } from "./secret-store";
 
 const KEY_PATH = path.join(process.cwd(), "data", ".encryption-key");
 const ALGORITHM = "aes-256-gcm";
@@ -28,23 +29,51 @@ function getOrCreateKey(): Buffer {
     fs.mkdirSync(dir, { recursive: true });
   }
 
+  const stored = readSystemSecret();
+  if (stored && /^[0-9a-f]{64}$/i.test(stored.value)) {
+    keyBackend = stored.backend;
+    return Buffer.from(stored.value, "hex");
+  }
+
   if (fs.existsSync(KEY_PATH)) {
     assertKeyFileMode(fs.statSync(KEY_PATH));
-    return Buffer.from(fs.readFileSync(KEY_PATH, "utf-8").trim(), "hex");
+    const value = fs.readFileSync(KEY_PATH, "utf-8").trim();
+    const backend = writeSystemSecret(value);
+    if (backend) {
+      keyBackend = backend;
+      fs.rmSync(KEY_PATH, { force: true });
+    }
+    return Buffer.from(value, "hex");
   }
 
   const key = crypto.randomBytes(32);
-  fs.writeFileSync(KEY_PATH, key.toString("hex"), { mode: 0o600 });
+  const backend = writeSystemSecret(key.toString("hex"));
+  if (backend) {
+    keyBackend = backend;
+  } else {
+    fs.writeFileSync(KEY_PATH, key.toString("hex"), { mode: 0o600 });
+    keyBackend = "file";
+  }
   return key;
 }
 
 let cachedKey: Buffer | null = null;
+let keyBackend: SecretBackend = "file";
 
 function getKey(): Buffer {
   if (!cachedKey) {
     cachedKey = getOrCreateKey();
   }
   return cachedKey;
+}
+
+export function exportEncryptionKeyHex(): string {
+  return getKey().toString("hex");
+}
+
+export function getEncryptionKeyBackend(): SecretBackend {
+  getKey();
+  return keyBackend;
 }
 
 export interface EncryptedData {

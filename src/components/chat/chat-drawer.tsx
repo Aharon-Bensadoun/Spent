@@ -546,7 +546,7 @@ function ChatComposer({
         )}
       </div>
       <div className="mt-1.5 px-2 text-[10px] text-muted-foreground">
-        Enter to send · Shift+Enter for new line
+        Enter to send · Shift+Enter for new line · Financial tool results are sent to your cloud AI provider
       </div>
     </div>
   );

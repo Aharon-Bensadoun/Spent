@@ -144,7 +144,7 @@ export async function POST(
           provider,
           systemPrompt,
           history: conversation,
-          toolContext: { workspaceId, today },
+          toolContext: { workspaceId, today, threadId },
           tools: CHAT_TOOL_DESCRIPTORS,
           signal: request.signal,
         })) {

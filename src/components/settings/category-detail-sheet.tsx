@@ -169,7 +169,12 @@ function BudgetSection({
   );
 
   useEffect(() => {
-    if (data) setAmount(String(Math.round(data.budget)));
+    if (!data) return;
+    const timer = window.setTimeout(
+      () => setAmount(String(Math.round(data.budget))),
+      0
+    );
+    return () => window.clearTimeout(timer);
   }, [data]);
 
   const handleBlur = () => {
@@ -325,7 +330,11 @@ function DescriptionSection({ category }: { category: Category }) {
   const queryClient = useQueryClient();
   const [value, setValue] = useState(category.description ?? "");
   useEffect(() => {
-    setValue(category.description ?? "");
+    const timer = window.setTimeout(
+      () => setValue(category.description ?? ""),
+      0
+    );
+    return () => window.clearTimeout(timer);
   }, [category.description]);
 
   const mutation = useMutation({

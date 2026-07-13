@@ -12,7 +12,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (!MUTATING_METHODS.has(request.method)) {
     return NextResponse.next();
   }

@@ -12,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Trash2, AlertTriangle } from "lucide-react";
+import { Trash2, AlertTriangle, Download, Upload, Loader2 } from "lucide-react";
 import {
   deleteAllTransactions,
   getSettings,
@@ -42,15 +42,112 @@ export default function DataSettingsPage() {
       )}
       <SettingCard
         title="How your data is stored"
-        description="Bank credentials and your Claude or OpenAI API keys are encrypted with AES-256-GCM. The encryption key lives at data/.encryption-key on your machine (gitignored) and is auto-generated on first run. All transaction data lives in data/spent.db. To reset everything, stop the dev server and delete the data/ directory."
+        description="Bank credentials and Claude or OpenAI API keys use AES-256-GCM. The encryption key is protected by DPAPI, Keychain, or Secret Service when available, with a restricted local file as fallback. Transaction data remains in data/spent.db."
       >
         <div className="rounded-lg border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
           <code>data/spent.db</code> · <code>data/.encryption-key</code>
         </div>
       </SettingCard>
+      <BackupCard />
       <DangerZone />
       <WorkspaceDangerCard />
     </SectionShell>
+  );
+}
+
+function BackupCard() {
+  const [backupPassword, setBackupPassword] = useState("");
+  const [restorePassword, setRestorePassword] = useState("");
+  const [archive, setArchive] = useState<File | null>(null);
+  const backup = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/data/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passphrase: backupPassword }),
+      });
+      if (!response.ok) throw new Error((await response.json()).error ?? "Backup failed");
+      return response.blob();
+    },
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `spent-backup-${new Date().toISOString().slice(0, 10)}.spent`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setBackupPassword("");
+      toast.success("Encrypted backup created");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const restore = useMutation({
+    mutationFn: async () => {
+      if (!archive) throw new Error("Choose a backup archive");
+      const form = new FormData();
+      form.set("archive", archive);
+      form.set("passphrase", restorePassword);
+      const response = await fetch("/api/data/restore", { method: "POST", body: form });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Restore failed");
+      return body as { restartRequired: boolean };
+    },
+    onSuccess: () => toast.success("Backup verified. Restart Spent to complete the restore."),
+    onError: (error: Error) => toast.error(error.message),
+  });
+  return (
+    <SettingCard
+      title="Encrypted backup"
+      description="Create a portable archive of every workspace, transaction and encrypted credential. The password is required to restore it."
+    >
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div className="space-y-3">
+          <Label htmlFor="backup-password">Backup password</Label>
+          <Input
+            id="backup-password"
+            type="password"
+            value={backupPassword}
+            onChange={(event) => setBackupPassword(event.target.value)}
+            placeholder="At least 10 characters"
+          />
+          <Button
+            variant="outline"
+            disabled={backupPassword.length < 10 || backup.isPending}
+            onClick={() => backup.mutate()}
+          >
+            {backup.isPending ? <Loader2 className="animate-spin" /> : <Download />}
+            Create backup
+          </Button>
+        </div>
+        <div className="space-y-3 border-t pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-5">
+          <Label htmlFor="restore-archive">Restore archive</Label>
+          <Input
+            id="restore-archive"
+            type="file"
+            accept=".spent,application/octet-stream"
+            onChange={(event) => setArchive(event.target.files?.[0] ?? null)}
+          />
+          <Input
+            aria-label="Restore password"
+            type="password"
+            value={restorePassword}
+            onChange={(event) => setRestorePassword(event.target.value)}
+            placeholder="Backup password"
+          />
+          <Button
+            variant="outline"
+            disabled={!archive || restorePassword.length < 10 || restore.isPending}
+            onClick={() => restore.mutate()}
+          >
+            {restore.isPending ? <Loader2 className="animate-spin" /> : <Upload />}
+            Verify and stage restore
+          </Button>
+          <p className="text-[11px] text-muted-foreground">
+            Restore is applied after Spent restarts. A pre-restore database copy is kept locally.
+          </p>
+        </div>
+      </div>
+    </SettingCard>
   );
 }
 

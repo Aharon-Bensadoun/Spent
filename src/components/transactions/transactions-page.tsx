@@ -33,9 +33,9 @@ const FILTER_OPTIONS: { value: TransactionKindFilter; label: string }[] = [
   { value: "expense", label: "Expenses" },
 ];
 
-export function TransactionsPage() {
+export function TransactionsPage({ initialSearch = "" }: { initialSearch?: string }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [categoryFilter, setCategoryFilter] = useState<number | undefined>();
   const [page, setPage] = useState(0);
   const [kind, setKind] = useState<TransactionKindFilter>("all");

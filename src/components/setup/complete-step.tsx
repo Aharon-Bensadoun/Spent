@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -52,14 +53,18 @@ export function CompleteStep({ onFinish }: CompleteStepProps) {
         }}
         className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-primary/15"
       >
-        <img
+        <Image
           src="/logo_lightmode.svg"
           alt="Spent"
+          width={84}
+          height={48}
           className="h-12 w-auto dark:hidden"
         />
-        <img
+        <Image
           src="/logo_darkmode.svg"
           alt="Spent"
+          width={84}
+          height={48}
           className="hidden h-12 w-auto dark:block"
         />
       </motion.div>

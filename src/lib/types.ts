@@ -145,6 +145,101 @@ export interface Budget {
   isAuto: boolean;
 }
 
+export type RecurringStatus =
+  | "detected"
+  | "subscription"
+  | "essential"
+  | "ignored"
+  | "cancelled";
+
+export interface FinancialAccount {
+  id: number;
+  provider: string;
+  accountNumber: string;
+  currency: string;
+  currentBalance: number | null;
+  balanceUpdatedAt: string | null;
+}
+
+export interface RecurringSeries {
+  id: number;
+  merchantKey: string;
+  displayName: string;
+  cadence: "weekly" | "monthly" | "quarterly" | "yearly" | "irregular";
+  averageAmount: number;
+  monthlyCost: number;
+  nextExpectedDate: string | null;
+  confidence: number;
+  occurrenceCount: number;
+  status: RecurringStatus;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}
+
+export interface InsightEvidence {
+  transactionIds: number[];
+  merchant?: string;
+  category?: string;
+  period?: { from: string; to: string };
+  baseline?: number;
+  observed?: number;
+}
+
+export interface FinancialInsight {
+  id: number;
+  kind: "recurring" | "price_increase" | "anomaly" | "budget_risk" | "fee" | "forecast";
+  severity: "info" | "warning" | "critical";
+  title: string;
+  summary: string;
+  monthlyImpact: number | null;
+  annualImpact: number | null;
+  evidence: InsightEvidence;
+  status: "active" | "dismissed" | "resolved";
+  detectedAt: string;
+}
+
+export interface SavingsGoal {
+  id: number;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string | null;
+  priority: 1 | 2 | 3;
+  status: "active" | "completed" | "paused";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CashFlowForecastPoint {
+  days: 30 | 60 | 90;
+  date: string;
+  conservative: number;
+  central: number;
+  optimistic: number;
+}
+
+export interface InsightsPayload {
+  generatedAt: string;
+  accounts: FinancialAccount[];
+  totalBalance: number | null;
+  recurring: RecurringSeries[];
+  insights: FinancialInsight[];
+  goals: SavingsGoal[];
+  forecast: CashFlowForecastPoint[];
+  potentialMonthlySavings: number;
+}
+
+export interface AgentProposal {
+  id: number;
+  actionType: "update_budget" | "create_goal" | "dismiss_insight";
+  title: string;
+  rationale: string;
+  payload: Record<string, unknown>;
+  status: "pending" | "confirmed" | "rejected" | "stale";
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export type HomeSection =
   | "thisMonth"
   | "cashFlow"

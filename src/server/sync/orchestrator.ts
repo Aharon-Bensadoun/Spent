@@ -42,6 +42,7 @@ import {
   registerOtpRequest,
 } from "@/server/sync/otp-bridge";
 import type { ScrapeResult } from "@/server/scrapers/types";
+import { upsertAccountBalance } from "@/server/db/queries/accounts";
 
 export type SyncEventSender = (
   event: string,
@@ -234,6 +235,18 @@ async function syncOneProvider(
       errorMessage: result.errorMessage ?? "Scraping failed",
       syncRunId,
     };
+  }
+
+  for (const account of result.accounts) {
+    upsertAccountBalance(
+      workspaceId,
+      provider,
+      account.accountNumber,
+      account.balance,
+      account.transactions[0]?.chargedCurrency ??
+        account.transactions[0]?.originalCurrency ??
+        "ILS"
+    );
   }
 
   const allTransactions = result.accounts.flatMap((account) =>

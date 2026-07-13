@@ -33,7 +33,8 @@ export function Dashboard() {
 
   // Hydrate the persisted view mode after mount to avoid SSR mismatch.
   useEffect(() => {
-    setViewMode(readViewMode());
+    const timer = window.setTimeout(() => setViewMode(readViewMode()), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleViewModeChange = useCallback((mode: CategoryViewMode) => {

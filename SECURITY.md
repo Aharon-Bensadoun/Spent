@@ -9,22 +9,21 @@ deploy it, almost none of the assumptions hold.
 | Asset | Location | How it's protected |
 |-------|----------|--------------------|
 | Bank credentials | `data/spent.db` (`bank_credentials` table) | Encrypted with AES-256-GCM |
-| Claude API key | `data/spent.db` (`settings` table) | Encrypted with AES-256-GCM |
-| Encryption key | `data/.encryption-key` | File permissions `0o600` (owner read-write only). **Not encrypted itself.** |
+| Claude/OpenAI API keys | `data/spent.db` (`settings` table) | Encrypted with AES-256-GCM |
+| Encryption key | OS vault or `data/.encryption-key` fallback | DPAPI, Keychain, Secret Service, or file mode `0o600` |
 | Transaction data | `data/spent.db` (`transactions` table) | Plaintext inside the SQLite file |
 
 ## What's protected at rest
 
-Bank credentials and the Claude API key never sit on disk in plaintext.
-They're encrypted with a 32-byte random key (`data/.encryption-key`)
+Bank credentials and cloud AI keys never sit on disk in plaintext.
+They're encrypted with a 32-byte random key
 using AES-256-GCM with a fresh IV per write. Anyone who reads the DB
 file alone cannot decrypt them.
 
 ## What's NOT protected at rest
 
-- The encryption key file itself is plaintext (hex). Whoever can read
-  `data/.encryption-key` AND `data/spent.db` can decrypt your
-  credentials.
+- If the OS credential vault is unavailable, the fallback encryption key is a
+  plaintext hex file. Whoever reads it and `data/spent.db` can decrypt credentials.
 - Transaction data (merchant, amount, date, category) is plaintext in
   the SQLite file. Someone with disk access can see all your spending.
 
@@ -38,6 +37,7 @@ local network or the internet. The library only contacts:
 
 - Your bank's domains (e.g., `digital.isracard.co.il`) — via Puppeteer
 - `api.anthropic.com` — only if Claude is your AI provider
+- `api.openai.com` — only if OpenAI is your AI provider
 - `localhost:11434` — only if Ollama is your AI provider
 - `www.google.com` — favicon API for bank logos (only the domain
   name leaves your machine, no credentials)
@@ -64,7 +64,7 @@ sandbox on.
 
 ## CSRF defense
 
-Next.js middleware (`src/middleware.ts`) rejects any mutating API
+Next.js proxy (`src/proxy.ts`) rejects any mutating API
 request (POST/PUT/PATCH/DELETE) whose `Origin` or `Referer` header
 doesn't match the app's own host. This prevents a malicious tab in
 your browser from triggering syncs / category changes against your
@@ -88,6 +88,7 @@ The credential-touching libraries are pinned to exact versions in
 - `israeli-bank-scrapers` — scrapes your bank with your password
 - `better-sqlite3` — reads/writes the DB file
 - `@anthropic-ai/sdk` — sends data to Claude
+- `openai` — sends data to OpenAI
 
 Run `npm run security:audit` to check for known vulnerabilities, and
 `npm run security:outdated` to see if anything is out of date. Re-audit
@@ -119,9 +120,8 @@ In rough order of effort vs. benefit:
 7. **Run sync with `Show browser during sync` enabled** the first few
    times so you can watch Puppeteer drive the bank's actual login page
 8. **Monitor outbound network traffic** with `mitmproxy` or Little Snitch
-9. **Move `data/.encryption-key` into your OS keychain** (macOS Keychain,
-   Windows DPAPI, Linux Secret Service). Not implemented yet — see the
-   roadmap below.
+9. **Verify your OS credential vault is available.** Spent uses macOS Keychain,
+   Windows DPAPI, or Linux Secret Service and falls back to a restricted file.
 
 ## Roadmap improvements
 
@@ -132,8 +132,6 @@ defense.
 - **Master password to unlock the app on startup.** Derive the
   encryption key from the password via Argon2id. Removes
   `data/.encryption-key` from disk entirely.
-- **OS keychain integration** for the encryption key (macOS Keychain
-  via `node-keytar`, etc.).
 - **Whole-DB encryption** with SQLCipher instead of just the credential
   columns. Hides transaction data from anyone with disk access.
 - **Per-credential key wrapping** (KEK/DEK pattern) so a compromised
@@ -181,11 +179,9 @@ systemd writes to `~/.local/state/spent/log/`. The app itself already
 avoids logging credentials (see "What's protected at rest" above);
 the always-on service does not change that.
 
-**The encryption key file's permissions are now asserted at startup.**
-`src/server/lib/encryption.ts` reads `data/.encryption-key` and refuses
-to start if the file mode is not `0600` (POSIX only; Windows relies on
-the user profile ACL). If you ever `chmod 644` the key file by accident,
-the server will fail loudly with the fix command.
+**The fallback encryption key file's permissions are asserted at startup.**
+When no OS vault is available, `src/server/lib/encryption.ts` refuses to read
+`data/.encryption-key` unless it has mode `0600` on POSIX systems.
 
 **What the always-on service does not protect against:**
 

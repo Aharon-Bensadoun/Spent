@@ -7,30 +7,31 @@ Spent is built to be the kind of finance app you'd actually trust with your own 
 
 ## What Spent stores, and where
 
-Everything Spent saves lives inside the `data/` folder of your install directory. There are two files:
+Everything Spent saves lives inside the `data/` folder of your install directory:
 
 - **`data/spent.db`** - a SQLite database with your encrypted bank credentials, your transactions, your categories, and your settings.
-- **`data/.encryption-key`** - a 32-byte random key generated on first run.
+- The 32-byte encryption key is held in Windows DPAPI, macOS Keychain, or Linux Secret Service when available. A mode-`0600` file is the fallback.
 
 Both files are local. Spent never uploads them anywhere. There is no "Spent cloud."
 
 ## How credentials are encrypted
 
-Bank passwords (and your Claude API key, if you use one) are encrypted with **AES-256-GCM** before being written to the database. The 32-byte key in `data/.encryption-key` is the one used to encrypt and decrypt.
+Bank passwords and Claude/OpenAI API keys are encrypted with **AES-256-GCM** before being written to the database.
 
-This means: if someone copies just `data/spent.db` off your computer, they cannot read your passwords. They'd also need `data/.encryption-key` *and* knowledge of how to decrypt it.
+This means: if someone copies just `data/spent.db` off your computer, they cannot read your passwords. They also need access to the key protected by your OS account or the fallback key file.
 
-It also means: **if you delete `data/.encryption-key`, your saved credentials are unrecoverable.** Spent generates a fresh key, and the next sync will fail until you re-enter passwords.
+It also means: **if you delete the stored encryption key, saved credentials are unrecoverable.** Spent generates a fresh key, and the next sync fails until passwords are re-entered.
 
-For backups: copy both files together, treat the encryption key like a password.
+Use *Settings → Data & privacy* to create a password-protected portable backup. Restores are integrity-checked and applied after restart.
 
 ## What goes over the network
 
 Three kinds of network traffic happen when Spent syncs:
 
 1. **Bank logins** - Spent opens a headless Chromium browser and logs into your bank's website using the credentials you provided. This traffic goes directly between your computer and your bank.
-2. **AI categorization** - if you chose Claude, the *merchant name and amount* of each new transaction are sent to Anthropic's API in batches of 50. Your bank credentials are never sent. If you chose Ollama, this traffic stays on your machine.
-3. **No analytics, no telemetry, no crash reports.** Spent does not phone home. Ever.
+2. **AI categorization** - Claude or OpenAI receives merchant, amount, memo, and category context in batches. Ollama stays local.
+3. **Financial assistant** - Claude or OpenAI receives the conversation and structured financial-tool results it requests. It never receives credentials or unrestricted SQL access.
+4. **No analytics, no telemetry, no crash reports.** Spent does not phone home.
 
 ## The threat model
 

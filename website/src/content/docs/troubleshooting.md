@@ -77,7 +77,7 @@ Clear your browser cache for `localhost:41234`. The dashboard's assets are cache
 
 ### "Where is my data?"
 
-In `data/spent.db` (a SQLite file) plus `data/.encryption-key`. Both live inside your Spent install folder.
+Financial data is in `data/spent.db`. Encryption keys are protected by the OS credential vault when available, with a restricted file fallback.
 
 ### How do I delete all my data?
 
@@ -92,9 +92,9 @@ The next time the service starts, Spent creates a fresh empty database.
 
 ### How do I move Spent to a new computer?
 
-1. Install Spent on the new computer (steps 1-6 of the install guide).
-2. Before the first run, copy `data/spent.db` *and* `data/.encryption-key` from the old computer to the new computer's Spent folder.
-3. Start the service. Spent picks up where it left off.
+1. Create an encrypted archive from *Settings → Data & privacy* on the old computer.
+2. Install Spent on the new computer and stage that archive from the same settings page.
+3. Restart the service. Spent validates and applies the restored database and key together.
 
 ## Still stuck?
 

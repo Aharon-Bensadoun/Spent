@@ -54,7 +54,11 @@ export function BankStep({ onComplete }: BankStepProps) {
   // Pick the right starting view once we've heard back from the query
   useEffect(() => {
     if (isPending || sub != null) return;
-    setSub(integrations.length > 0 ? "ready" : "pick");
+    const timer = window.setTimeout(
+      () => setSub(integrations.length > 0 ? "ready" : "pick"),
+      0
+    );
+    return () => window.clearTimeout(timer);
   }, [isPending, integrations.length, sub]);
 
   const connectedIds = new Set(integrations.map((i) => i.provider));

@@ -13,6 +13,10 @@ const FRIENDLY_NAMES: Record<string, string> = {
   get_top_merchants: "Reading top merchants",
   get_budgets: "Reading budgets",
   find_recurring_charges: "Scanning recurring charges",
+  get_financial_insights: "Checking financial insights",
+  propose_budget_update: "Preparing a budget change",
+  propose_savings_goal: "Preparing a savings goal",
+  propose_dismiss_insight: "Preparing to dismiss an insight",
 };
 
 function friendlyLabel(name: string): string {

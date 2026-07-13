@@ -10,6 +10,10 @@ import type {
   Integration,
   Workspace,
   HomePayload,
+  InsightsPayload,
+  AgentProposal,
+  SavingsGoal,
+  RecurringStatus,
 } from "./types";
 import { getActiveWorkspaceIdSync } from "./workspace-store";
 
@@ -31,6 +35,52 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(text);
   }
   return res.json() as Promise<T>;
+}
+
+export interface InsightsApiPayload extends InsightsPayload {
+  proposals: AgentProposal[];
+}
+
+export function getInsights() {
+  return fetchJSON<InsightsApiPayload>("/api/insights");
+}
+
+export function dismissFinancialInsight(id: number) {
+  return fetchJSON<{ ok: true }>(`/api/insights/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "dismissed" }),
+  });
+}
+
+export function createSavingsGoal(input: {
+  name: string;
+  targetAmount: number;
+  currentAmount?: number;
+  targetDate?: string | null;
+  priority?: number;
+}) {
+  return fetchJSON<SavingsGoal>("/api/goals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export function decideAgentProposal(id: number, decision: "confirm" | "reject") {
+  return fetchJSON<AgentProposal>(`/api/agent-proposals/${id}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ decision }),
+  });
+}
+
+export function setRecurringStatus(id: number, status: RecurringStatus) {
+  return fetchJSON<{ ok: true }>(`/api/recurring/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
 }
 
 export function listWorkspaces() {

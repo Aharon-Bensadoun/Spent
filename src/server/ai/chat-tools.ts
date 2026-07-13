@@ -18,16 +18,20 @@ import {
 import {
   getAllBudgets,
   getAutoBudgetAverage,
+  getBudgetForCategory,
 } from "../db/queries/budgets";
 import { getAppSettings } from "../db/queries/settings";
 import { getCashFlow } from "../db/queries/home";
 import type { ToolDescriptor } from "./chat-types";
+import { getInsightsPayload } from "../db/queries/insights";
+import { createProposal } from "../db/queries/proposals";
 
 /** Runtime context passed to every tool execution. */
 export interface ToolContext {
   workspaceId: number;
   /** ISO date 'YYYY-MM-DD' for "today" in the workspace's locale. */
   today: string;
+  threadId?: number;
 }
 
 export interface ChatTool {
@@ -439,6 +443,136 @@ const findRecurringCharges: ChatTool = {
   },
 };
 
+const getFinancialInsights: ChatTool = {
+  descriptor: {
+    name: "get_financial_insights",
+    description:
+      "Return deterministic savings opportunities, anomalies, recurring charges, balances, goals and 30/60/90 day cash-flow forecasts. Use this for advice about saving, waste, unusual spending or future cash flow.",
+    inputSchema: schema({}),
+  },
+  execute(_input, ctx) {
+    const payload = getInsightsPayload(ctx.workspaceId);
+    return {
+      generatedAt: payload.generatedAt,
+      totalBalance: payload.totalBalance,
+      potentialMonthlySavings: payload.potentialMonthlySavings,
+      insights: payload.insights.slice(0, 12),
+      recurring: payload.recurring.slice(0, 12),
+      goals: payload.goals,
+      forecast: payload.forecast,
+    };
+  },
+};
+
+const proposeBudgetUpdate: ChatTool = {
+  descriptor: {
+    name: "propose_budget_update",
+    description:
+      "Create a user-confirmable proposal to change one category budget. This does not apply the change. Use only after reading budgets and explaining the numeric rationale.",
+    inputSchema: schema(
+      {
+        categoryId: { type: "integer", description: "Category id from get_budgets." },
+        amount: { type: "number", minimum: 0, description: "Proposed monthly budget in ILS." },
+        rationale: { type: "string", description: "Short evidence-based reason for this amount." },
+      },
+      ["categoryId", "amount", "rationale"]
+    ),
+  },
+  execute(input, ctx) {
+    const i = (input as Record<string, unknown>) ?? {};
+    const categoryId = asInt(i.categoryId, 1, Number.MAX_SAFE_INTEGER, -1);
+    const amount = asNumber(i.amount);
+    const rationale = asString(i.rationale)?.trim() ?? "";
+    const category = getCategoryById(ctx.workspaceId, categoryId);
+    if (!category || amount == null || amount < 0 || !rationale) {
+      return { error: "Valid categoryId, non-negative amount and rationale are required" };
+    }
+    const current = getBudgetForCategory(ctx.workspaceId, categoryId);
+    const proposal = createProposal(ctx.workspaceId, {
+      threadId: ctx.threadId,
+      actionType: "update_budget",
+      title: `Set ${category.name} budget to ILS ${Math.round(amount)}`,
+      rationale,
+      payload: { categoryId, categoryName: category.name, amount },
+      precondition: { currentAmount: current?.monthlyAmount ?? null },
+    });
+    return { proposal, requiresConfirmation: true };
+  },
+};
+
+const proposeSavingsGoal: ChatTool = {
+  descriptor: {
+    name: "propose_savings_goal",
+    description:
+      "Create a user-confirmable savings goal proposal. This does not create the goal until the user confirms it.",
+    inputSchema: schema(
+      {
+        name: { type: "string", description: "Short goal name." },
+        targetAmount: { type: "number", minimum: 1, description: "Target in ILS." },
+        currentAmount: { type: "number", minimum: 0, description: "Already saved, default 0." },
+        targetDate: { type: "string", description: "Optional target date YYYY-MM-DD." },
+        priority: { type: "integer", minimum: 1, maximum: 3, description: "1 high, 3 low." },
+        rationale: { type: "string", description: "Short evidence-based reason." },
+      },
+      ["name", "targetAmount", "rationale"]
+    ),
+  },
+  execute(input, ctx) {
+    const i = (input as Record<string, unknown>) ?? {};
+    const name = asString(i.name)?.trim() ?? "";
+    const targetAmount = asNumber(i.targetAmount);
+    const currentAmount = asNumber(i.currentAmount) ?? 0;
+    const rationale = asString(i.rationale)?.trim() ?? "";
+    if (!name || targetAmount == null || targetAmount <= 0 || currentAmount < 0 || !rationale) {
+      return { error: "Valid name, targetAmount and rationale are required" };
+    }
+    const proposal = createProposal(ctx.workspaceId, {
+      threadId: ctx.threadId,
+      actionType: "create_goal",
+      title: `Create goal: ${name}`,
+      rationale,
+      payload: {
+        name,
+        targetAmount,
+        currentAmount,
+        targetDate: asString(i.targetDate) ?? null,
+        priority: asInt(i.priority, 1, 3, 2),
+      },
+    });
+    return { proposal, requiresConfirmation: true };
+  },
+};
+
+const proposeDismissInsight: ChatTool = {
+  descriptor: {
+    name: "propose_dismiss_insight",
+    description:
+      "Create a user-confirmable proposal to dismiss one financial insight after the user says it is irrelevant. Never dismiss automatically.",
+    inputSchema: schema(
+      {
+        insightId: { type: "integer", description: "Insight id from get_financial_insights." },
+        rationale: { type: "string", description: "Why this insight should be dismissed." },
+      },
+      ["insightId", "rationale"]
+    ),
+  },
+  execute(input, ctx) {
+    const i = (input as Record<string, unknown>) ?? {};
+    const insightId = asInt(i.insightId, 1, Number.MAX_SAFE_INTEGER, -1);
+    const rationale = asString(i.rationale)?.trim() ?? "";
+    const insight = getInsightsPayload(ctx.workspaceId).insights.find((row) => row.id === insightId);
+    if (!insight || !rationale) return { error: "Valid insightId and rationale are required" };
+    const proposal = createProposal(ctx.workspaceId, {
+      threadId: ctx.threadId,
+      actionType: "dismiss_insight",
+      title: `Dismiss: ${insight.title}`,
+      rationale,
+      payload: { insightId },
+    });
+    return { proposal, requiresConfirmation: true };
+  },
+};
+
 export const CHAT_TOOLS: ChatTool[] = [
   getPeriodSummary,
   getMonthlyTrend,
@@ -448,6 +582,10 @@ export const CHAT_TOOLS: ChatTool[] = [
   getTopMerchantsTool,
   getBudgetsTool,
   findRecurringCharges,
+  getFinancialInsights,
+  proposeBudgetUpdate,
+  proposeSavingsGoal,
+  proposeDismissInsight,
 ];
 
 export const CHAT_TOOL_DESCRIPTORS: ToolDescriptor[] = CHAT_TOOLS.map(
