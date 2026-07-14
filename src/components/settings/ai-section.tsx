@@ -56,6 +56,7 @@ function AIForm({ settings }: { settings: AppSettings }) {
   );
   const [claudeApiKey, setClaudeApiKey] = useState("");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [geminiApiKey, setGeminiApiKey] = useState("");
   const [openaiModel, setOpenaiModel] = useState(settings.openaiModel);
   const [ollamaUrl, setOllamaUrl] = useState(settings.ollamaUrl);
   const [ollamaModel, setOllamaModel] = useState(settings.ollamaModel);
@@ -68,8 +69,10 @@ function AIForm({ settings }: { settings: AppSettings }) {
           provider === "claude" && claudeApiKey
             ? claudeApiKey
             : provider === "openai" && openaiApiKey
-              ? openaiApiKey
-              : undefined,
+            ? openaiApiKey
+            : provider === "gemini" && geminiApiKey
+            ? geminiApiKey
+            : undefined,
         openaiModel: provider === "openai" ? openaiModel.trim() : undefined,
         ollamaUrl: provider === "ollama" ? ollamaUrl : undefined,
         ollamaModel: provider === "ollama" ? ollamaModel : undefined,
@@ -79,6 +82,7 @@ function AIForm({ settings }: { settings: AppSettings }) {
       toast.success("AI settings saved");
       setClaudeApiKey("");
       setOpenaiApiKey("");
+      setGeminiApiKey("");
     },
   });
 
@@ -100,6 +104,11 @@ function AIForm({ settings }: { settings: AppSettings }) {
                 id: "openai",
                 title: "OpenAI",
                 desc: "Chat Completions API. Paid usage. Bring your own API key.",
+              },
+              {
+                id: "gemini",
+                title: "Gemini (Google)",
+                desc: "Fast and capable. Paid API. Bring your own API key.",
               },
               {
                 id: "ollama",
@@ -145,6 +154,27 @@ function AIForm({ settings }: { settings: AppSettings }) {
               value={claudeApiKey}
               onChange={(e) => setClaudeApiKey(e.target.value)}
               placeholder="sk-ant-..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave blank to keep your existing key.
+            </p>
+          </div>
+        </SettingCard>
+      )}
+
+      {provider === "gemini" && (
+        <SettingCard
+          title="Gemini API key"
+          description="Paste your key from Google AI Studio. It's encrypted at rest with AES-256-GCM."
+        >
+          <div className="space-y-2">
+            <Label htmlFor="gemini-key">API key</Label>
+            <Input
+              id="gemini-key"
+              type="password"
+              value={geminiApiKey}
+              onChange={(e) => setGeminiApiKey(e.target.value)}
+              placeholder="AIza..."
             />
             <p className="text-xs text-muted-foreground">
               Leave blank to keep your existing key.

@@ -18,7 +18,7 @@ import {
   type PullEvent,
 } from "@/lib/api";
 
-type AIChoice = "claude" | "openai" | "ollama" | "none";
+type AIChoice = "claude" | "openai" | "gemini" | "ollama" | "none";
 
 interface AIStepProps {
   onComplete: () => void;
@@ -36,6 +36,7 @@ interface PullState {
 const TINTS = {
   claude: { bg: "#fad6c0", mid: "#e89968", ink: "#7a4222" },
   openai: { bg: "#d4e8f7", mid: "#6b9bd2", ink: "#1e3a52" },
+  gemini: { bg: "#d8e2ef", mid: "#8ab4f8", ink: "#174ea6" },
   ollama: { bg: "#dbedd1", mid: "#a8d18d", ink: "#3e5a2e" },
   none: { bg: "#e6dfd1", mid: "#a89978", ink: "#5b5240" },
 } as const;
@@ -53,7 +54,7 @@ const PROVIDERS: ProviderMeta[] = [
     id: "claude",
     title: "Claude",
     tagline: "Anthropic API, fast and accurate",
-    icon: "✦",
+    icon: "✨",
     recommended: true,
   },
   {
@@ -63,26 +64,34 @@ const PROVIDERS: ProviderMeta[] = [
     icon: "●",
   },
   {
+    id: "gemini",
+    title: "Gemini",
+    tagline: "Google's powerful models (cloud)",
+    icon: "🇬",
+  },
+  {
     id: "ollama",
     title: "Ollama",
     tagline: "Runs locally, free and private",
-    icon: "◐",
+    icon: "◧",
   },
   {
     id: "none",
     title: "Manual",
     tagline: "No AI, categorize transactions yourself",
-    icon: "↷",
+    icon: "↩",
   },
 ];
 
 export function AIStep({ onComplete, onBack }: AIStepProps) {
   const [choice, setChoice] = useState<AIChoice>("claude");
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState(""); // Used for Claude
   const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [geminiApiKey, setGeminiApiKey] = useState("");
   const [openaiModel, setOpenaiModel] = useState("gpt-4o-mini");
   const [showClaudeKey, setShowClaudeKey] = useState(false);
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434");
   const [ollamaModel, setOllamaModel] = useState("llama3.2:3b");
   const [installedModels, setInstalledModels] = useState<string[]>([]);
@@ -117,11 +126,15 @@ export function AIStep({ onComplete, onBack }: AIStepProps) {
 
   const openaiKeyOk =
     /^sk-/i.test(openaiApiKey.trim()) && openaiApiKey.trim().length >= 20;
+  
+  const geminiKeyOk =
+    /^AIza/.test(geminiApiKey.trim()) && geminiApiKey.trim().length > 25;
 
   const canContinue =
     choice === "none" ||
     (choice === "claude" && /^sk-ant-/.test(apiKey) && apiKey.length > 25) ||
     (choice === "openai" && openaiKeyOk && openaiModel.trim().length > 0) ||
+    (choice === "gemini" && geminiKeyOk) ||
     (choice === "ollama" && modelInstalled);
 
   const handlePull = () => {
@@ -168,8 +181,10 @@ export function AIStep({ onComplete, onBack }: AIStepProps) {
           choice === "claude"
             ? apiKey
             : choice === "openai"
-              ? openaiApiKey
-              : undefined,
+            ? openaiApiKey
+            : choice === "gemini"
+            ? geminiApiKey
+            : undefined,
         openaiModel: choice === "openai" ? openaiModel.trim() : undefined,
         ollamaUrl: choice === "ollama" ? ollamaUrl : undefined,
         ollamaModel: choice === "ollama" ? ollamaModel : undefined,
@@ -230,6 +245,14 @@ export function AIStep({ onComplete, onBack }: AIStepProps) {
                         setModel={setOpenaiModel}
                         showKey={showOpenaiKey}
                         setShowKey={setShowOpenaiKey}
+                      />
+                    )}
+                    {p.id === "gemini" && (
+                      <GeminiConfig
+                        apiKey={geminiApiKey}
+                        setApiKey={setGeminiApiKey}
+                        showKey={showGeminiKey}
+                        setShowKey={setShowGeminiKey}
                       />
                     )}
                     {p.id === "ollama" && (
@@ -381,6 +404,56 @@ function ClaudeConfig({
   );
 }
 
+function GeminiConfig({
+  apiKey,
+  setApiKey,
+  showKey,
+  setShowKey,
+}: {
+  apiKey: string;
+  setApiKey: (v: string) => void;
+  showKey: boolean;
+  setShowKey: (v: boolean) => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-xl border border-border bg-card/60 p-4">
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor="gemini-api-key" className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
+          API key
+        </Label>
+        <a
+          href="https://aistudio.google.com/app/apikey"
+          target="_blank"
+          rel="noreferrer"
+          className="text-[11px] font-medium text-primary hover:underline"
+        >
+          Get a key ↗
+        </a>
+      </div>
+      <div className="relative">
+        <Input
+          id="gemini-api-key"
+          type={showKey ? "text" : "password"}
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="AIza..."
+          className="font-mono pr-14"
+        />
+        <button
+          type="button"
+          onClick={() => setShowKey(!showKey)}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent"
+        >
+          {showKey ? "hide" : "show"}
+        </button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Encrypted with AES-256-GCM and stored locally.
+      </p>
+    </div>
+  );
+}
+
 function OpenAIConfig({
   apiKey,
   setApiKey,
@@ -428,17 +501,18 @@ function OpenAIConfig({
           {showKey ? "hide" : "show"}
         </button>
       </div>
-      <div className="space-y-1.5">
+
+      <div>
         <Label htmlFor="openai-model" className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
           Model
         </Label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
           {SUGGESTED_OPENAI_MODELS.map((id) => (
             <button
               key={id}
               type="button"
               onClick={() => setModel(id)}
-              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
                 model === id
                   ? "border-primary bg-primary/10 text-primary"
                   : "border-border bg-background hover:border-primary/40"
@@ -453,12 +527,9 @@ function OpenAIConfig({
           value={model}
           onChange={(e) => setModel(e.target.value)}
           placeholder="e.g. gpt-4o-mini"
-          className="font-mono text-[12px]"
+          className="mt-2 font-mono text-sm"
         />
       </div>
-      <p className="text-[11px] text-muted-foreground">
-        Encrypted with AES-256-GCM and stored locally. Transaction summaries are sent to OpenAI when you categorize.
-      </p>
     </div>
   );
 }
@@ -487,87 +558,50 @@ function OllamaConfig({
   onCancel: () => void;
 }) {
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
-      <div
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium"
-        style={{
-          background:
-            reachable === false
-              ? "rgba(232, 153, 104, 0.18)"
-              : "rgba(168, 209, 141, 0.22)",
-          color: reachable === false ? "#9a4a26" : "#3e5a2e",
-        }}
-      >
-        <span
-          className="h-1.5 w-1.5 rounded-full"
-          style={{
-            background: reachable === false ? "#c97b5c" : "#6b8c70",
-          }}
-        />
-        {reachable === false ? (
-          <>
-            Ollama not detected
-            <a
-              href="https://ollama.com"
-              target="_blank"
-              rel="noreferrer"
-              className="ml-auto font-bold underline"
-            >
-              Install ↗
-            </a>
-          </>
-        ) : (
-          <>Ollama running on {url}</>
-        )}
-      </div>
-
-      <div className="space-y-1">
+    <div className="space-y-4 rounded-xl border border-border bg-card/60 p-4">
+      <div className="space-y-2">
         <Label htmlFor="ollama-url" className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-          Server URL
+          Ollama URL
         </Label>
         <Input
           id="ollama-url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="font-mono text-[12px]"
+          placeholder="http://localhost:11434"
         />
+        {reachable === false && (
+          <p className="text-[11px] text-destructive">
+            Could not reach Ollama at this URL. Is it running?
+          </p>
+        )}
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-          Pick a model
+          Model
         </Label>
-        <div className="grid grid-cols-3 gap-1.5">
-          {RECOMMENDED_OLLAMA_MODELS.slice(0, 3).map((m) => (
+        <div className="flex flex-wrap gap-1.5">
+          {RECOMMENDED_OLLAMA_MODELS.map((m) => (
             <button
               key={m.name}
               type="button"
               onClick={() => setModel(m.name)}
-              className={`relative rounded-lg border bg-background p-2 text-left transition-colors ${
+              className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
                 model === m.name
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/40"
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-background hover:border-primary/40"
               }`}
             >
-              <div className="flex items-baseline justify-between gap-1">
-                <span className="truncate text-[11px] font-bold tracking-tight">
-                  {m.name}
-                </span>
-                {m.recommended && (
-                  <span className="rounded-full bg-primary/10 px-1 py-0 text-[8px] font-bold uppercase tracking-wider text-primary">
-                    rec
-                  </span>
-                )}
-              </div>
-              <div className="mt-0.5 font-mono text-[9px] text-muted-foreground">
-                {m.sizeGb} GB
-              </div>
-              <p className="mt-1 text-[10px] leading-snug text-muted-foreground">
-                {m.description}
-              </p>
+              {m.name}
             </button>
           ))}
         </div>
+        <p className="text-[11px] text-muted-foreground">
+          {
+            RECOMMENDED_OLLAMA_MODELS.find((m) => m.name === model)
+              ?.description
+          }
+        </p>
       </div>
 
       <OllamaPullCTA
@@ -585,10 +619,8 @@ function OllamaConfig({
 
 function ManualNote() {
   return (
-    <div className="rounded-xl border border-border bg-card/60 p-4 text-[12px] leading-relaxed text-muted-foreground">
-      Spent will leave transactions <span className="text-foreground">uncategorized</span>;
-      you can assign categories from the transactions table any time. Switch to
-      Claude, OpenAI, or Ollama later in{" "}
+    <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+      No problem. You can still set up Claude, OpenAI, or Ollama later in{" "}
       <span className="font-bold text-foreground">Settings → AI</span>.
     </div>
   );
