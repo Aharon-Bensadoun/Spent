@@ -351,7 +351,7 @@ export interface SetupStatus {
 
 export interface AppSettings {
   monthsToSync: number;
-  aiProvider: "claude" | "openai" | "ollama" | "none";
+  aiProvider: "claude" | "openai" | "gemini" | "ollama" | "none";
   openaiModel: string;
   ollamaUrl: string;
   ollamaModel: string;
